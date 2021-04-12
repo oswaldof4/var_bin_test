@@ -1,0 +1,105 @@
+---
+title: "variable columns"
+author: "Oswaldo Felix"
+date: "4/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+```{r}
+# variable set up
+timeseries <- c(seq(1:1000))
+bins <- c(10,50,100,500)
+colnames <- 0
+colnames2 <- 0
+
+# creates col names based on bins - Whoohooo!!!
+for (i in 1:(length(bins)+1)){
+  if (i==1){
+    colnames[i] <- paste0("<", as.character(bins[i]))
+  }
+  else if (i==length(bins)+1){
+   colnames[i] <- paste0(">", as.character(bins[i-1])) 
+  }
+  else {
+    colnames[i] <- paste(as.character(bins[i-1]), as.character(bins[i]), sep="-")
+  }
+}
+
+# creates markov relations col names - let's goo!~~
+n=1
+for (i in 1:length(colnames)){
+  for (j in 1:length(colnames)){
+   colnames2[n] <- paste(colnames[i], colnames[j], sep=" to ")
+   n = n+1
+  }
+}
+
+# simple variable binning - I'm on fucking fire
+for (i in 1:length(timeseries)){
+  for (j in 0:length(bins)){
+    if (j == 0 && timeseries[i] <= bins[j+1]){
+      print(paste("<=", bins[j+1], timeseries[i]))
+    }
+    else if (j == length(bins) && timeseries[i] > bins[j]){
+      print(paste(">", bins[j], timeseries[i]))
+    }
+    else if (timeseries[i] > bins[j] && timeseries[i] <= bins[j+1]){
+      print(paste(paste(bins[j], bins[j+1], sep = " to "), timeseries[i]))
+    }
+  }
+}
+
+```
+
+```{r}
+# custom binned graphing
+timeseries <- rnorm(2000, mean = 200, sd = 300)
+bins <- c(10,50,100,500)
+colnames <- 0
+
+# creates col names based on bins - Whoohooo!!!
+for (i in 1:(length(bins)+1)){
+  if (i==1){
+    colnames[i] <- paste0("<", as.character(bins[i]))
+  }
+  else if (i==length(bins)+1){
+   colnames[i] <- paste0(">", as.character(bins[i-1])) 
+  }
+  else {
+    colnames[i] <- paste(as.character(bins[i-1]), as.character(bins[i]), sep="-")
+  }
+}
+
+count = c(rep(0, (length(bins)+1)))
+for (i in 1:length(timeseries)){
+  for (j in 0:length(bins)){
+    if (j == 0 && timeseries[i] <= bins[j+1]){
+      count[j+1] = count[j+1]+1
+    }
+    else if (j == length(bins) && timeseries[i] > bins[j]){
+      count[j+1] = count[j+1]+1
+    }
+    else if (timeseries[i] > bins[j] && timeseries[i] <= bins[j+1]){
+      count[j+1] = count[j+1]+1
+    }
+  }
+}
+
+bin = as.factor(colnames) %>% 
+  fct_relevel(colnames)
+
+data = tibble(bin, count)
+
+ggplot(data = data)+
+  geom_col(aes(x = bin, y = count))+
+  theme_bw()+
+  labs(title="Histogram", x = "Bins", y = "Count",
+       subtitle="custom binwidths")
+
+```
+
