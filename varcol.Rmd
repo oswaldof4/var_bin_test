@@ -8,6 +8,8 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+library(lubridate)
+library(dplyr)
 ```
 
 ```{r}
@@ -49,11 +51,16 @@ for (i in 1:length(timeseries)){
 ```{r}
 #Variable set up
 set.seed(5)
-timeseries <- rnorm(2000, mean = 200, sd = 300)
-bins <- c(10,100,750)
+y <- 30 # number of days
+price <- rnorm(24*y, mean = 200, sd = 300) # price w/ norm dist
+datetime <- as.POSIXct("2018-01-01 00:00:00", tz = "UTC")
+datetime <- seq.POSIXt(from = datetime, length.out = y*24, by = "1 hour")
+time <- hour(datetime)
+timeseries <- tibble(time, price) 
+bins <- c(10,500)
 colnames <- 0
 
-#Creates col names based on bins - Whoohooo!!!
+#Creates col names based on bins
 bins <- bins %>% 
   sort()
 
@@ -69,7 +76,7 @@ for (i in 1:(length(bins)+1)){
   }
 }
 
-#Creates Markov relations col names - let's goo!~~
+#Creates Markov relations col names
 colnames2 <- 0
 n=1
 for (i in 1:length(colnames)){
@@ -79,25 +86,126 @@ for (i in 1:length(colnames)){
   }
 }
 
-#Markov binning
+#Creates output dataframe
+out_scratch1 <- rep(0, times = length(colnames2))
+out_scratch2 <- replicate(out_scratch1, n = 24^2)
+
+# Variable filters
+# hr <- time
+# jp <- seq(1:24)-1
+# 
+# for (i in 1:length(hr)){
+#   for(j in 1:length(jp)){
+#     if(hr[i]+jp[j] > 23){
+#       jphr = hr[i]+jp[j]-23
+#     } else {
+#       jphr = hr[i]+jp[j]
+#     }
+#     scratch <- timeseries %>% 
+#       filter(time %in% c(hr[i], jphr))
+#     #print(paste(hr[i],jp[j],jphr)) #check jump hour
+#   }
+# }
+
+#Markov binning - Now this is huge!!!
 c <- c(rep(0, (length(bins)+1)))
 d <- replicate(n = length(c), c) #Maybe there is a way to get count directly into colnames 2
-for (i in 1:length(timeseries)){
+for (i in 1:(length(timeseries$time)-1)){
   for (j in 0:length(bins)){
-    if (j == 0 && timeseries[i] <= bins[j+1]){
-      #print(paste("<=", bins[j+1], timeseries[i]))
+    # Checks for lowest bin value
+    if (j == 0 && timeseries$price[i] <= bins[j+1]){
+      for (k in 0:length(bins)){
+        # Checks for intersection of lowest values
+        if (k == 0 && timeseries$price[i+1] <= bins[k+1]){
+          d[k+1] = d[k+1]+1
+        }
+        # Checks for low + high
+        else if (k == length(bins) && timeseries$price[i+1] > bins[k]){
+          d[k+1] = d[k+1]+1
+        }
+        # Checks for everything else
+        else if (timeseries$price[i+1] > bins[k] && timeseries$price[i+1] <= bins[k+1]){
+          d[k+1] = d[k+1]+1
+        }
+      }
+      # Keep for normalization!!!
       c[j+1] = c[j+1]+1
     }
-    else if (j == length(bins) && timeseries[i] > bins[j]){
-      #print(paste(">", bins[j], timeseries[i]))
+    # Checks for highest bin value
+    else if (j == length(bins) && timeseries$price[i] > bins[j]){
+      for (k in 0:length(bins)){
+        # Checks for intersection of high + low
+        if (k == 0 && timeseries$price[i+1] <= bins[k+1]){
+          d[j*(j+1)+k+1] = d[j*(j+1)+k+1]+1
+        }
+        # Checks for intersection of high values
+        else if (k == length(bins) && timeseries$price[i+1] > bins[k]){
+          d[j*(j+1)+k+1] = d[j*(j+1)+k+1]+1
+        }
+        # Checks for everything else
+        else if (timeseries$price[i+1] > bins[k] && timeseries$price[i+1] <= bins[k+1]){
+          d[j*(j+1)+k+1] = d[j*(j+1)+k+1]+1
+        }
+      }
+      # Keep for normalization!!!
       c[j+1] = c[j+1]+1
     }
-    else if (timeseries[i] > bins[j] && timeseries[i] <= bins[j+1]){
-      #print(paste(paste(bins[j], bins[j+1], sep = " to "), timeseries[i]))
+    else if (timeseries$price[i] > bins[j] && timeseries$price[i] <= bins[j+1]){
+      for (k in 0:length(bins)){
+        # Checks for intersection of ???+low
+        if (k == 0 && timeseries$price[i+1] <= bins[k+1]){
+          d[j*(length(bins)+1)+k+1] = d[j*(length(bins)+1)+k+1]+1
+        }
+        # Checks for intersection of ???+high
+        else if (k == length(bins) && timeseries$price[i+1] > bins[k]){
+          d[j*(length(bins)+1)+k+1] = d[j*(length(bins)+1)+k+1]+1
+        }
+        # Checks for everything else
+        else if (timeseries$price[i+1] > bins[k] && timeseries$price[i+1] <= bins[k+1]){
+          d[j*(length(bins)+1)+k+1] = d[j*(length(bins)+1)+k+1]+1
+        }
+      }
+      #Keep for normalization!!!
       c[j+1] = c[j+1]+1
     }
   }
 }
+# Normalization
+
+
+# Converts Output
+# May nneed to change d[i]
+for (i in 1:(length(c)^2)){
+  out_scratch2[i] = d[i]
+}
+out_scratch3 <- as.data.frame(out_scratch2)
+out_scratch3 <- t(out_scratch3)
+colnames(out_scratch3) <- colnames2
+output <- as.data.frame(out_scratch3) %>% 
+  mutate(hour = rep(0:23, times = 1, each = 24),
+                 jump = rep((seq(1:24)-1), 24)) %>% 
+  relocate(jump) %>% 
+  relocate(hour)
+
+# #Simple binning
+# c <- c(rep(0, (length(bins)+1)))
+# d <- replicate(n = length(c), c) #Maybe there is a way to get count directly into colnames 2
+# for (i in 1:length(timeseries$time)){
+#   for (j in 0:length(bins)){
+#     if (j == 0 && timeseries$price[i] <= bins[j+1]){
+#       #print(paste("<=", bins[j+1], timeseries$price[i]))
+#       c[j+1] = c[j+1]+1
+#     }
+#     else if (j == length(bins) && timeseries$price[i] > bins[j]){
+#       #print(paste(">", bins[j], timeseries$price[i]))
+#       c[j+1] = c[j+1]+1
+#     }
+#     else if (timeseries$price[i] > bins[j] && timeseries$price[i] <= bins[j+1]){
+#       #print(paste(paste(bins[j], bins[j+1], sep = " to "), timeseries$price[i]))
+#       c[j+1] = c[j+1]+1
+#     }
+#   }
+# }
 
 ```
 
