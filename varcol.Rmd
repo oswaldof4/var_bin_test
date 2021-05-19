@@ -12,7 +12,7 @@ library(lubridate)
 library(dplyr)
 ```
 
-```{r}
+```{r Beginnings with variable binning}
 #Variable set up
 timeseries <- c(seq(1:1000))
 bins <- c(10,25,100,500)
@@ -48,7 +48,7 @@ for (i in 1:length(timeseries)){
 
 ```
 
-```{r}
+```{r Pieces of Markov code}
 #Variable set up
 set.seed(5)
 y <- 30 # number of days
@@ -57,7 +57,7 @@ datetime <- as.POSIXct("2018-01-01 00:00:00", tz = "UTC")
 datetime <- seq.POSIXt(from = datetime, length.out = y*24, by = "1 hour")
 time <- hour(datetime)
 timeseries <- tibble(time, price) 
-bins <- c(10,500)
+bins <- c(0,10,500)
 colnames <- 0
 
 #Creates col names based on bins
@@ -91,21 +91,21 @@ out_scratch1 <- rep(0, times = length(colnames2))
 out_scratch2 <- replicate(out_scratch1, n = 24^2)
 
 # Variable filters
-# hr <- time
-# jp <- seq(1:24)-1
-# 
-# for (i in 1:length(hr)){
-#   for(j in 1:length(jp)){
-#     if(hr[i]+jp[j] > 23){
-#       jphr = hr[i]+jp[j]-23
-#     } else {
-#       jphr = hr[i]+jp[j]
-#     }
-#     scratch <- timeseries %>% 
-#       filter(time %in% c(hr[i], jphr))
-#     #print(paste(hr[i],jp[j],jphr)) #check jump hour
-#   }
-# }
+hr <- seq(1:24)
+jp <- seq(1:24)-1
+
+for (i in 1:length(hr)){
+  for(j in 1:length(jp)){
+    if(hr[i]+jp[j] > 23){
+      jphr = hr[i]+jp[j]-23
+    } else {
+      jphr = hr[i]+jp[j]
+    }
+    scratch <- timeseries %>%
+      filter(time %in% c(hr[i], jphr))
+    print(paste(hr[i],jp[j],jphr)) #check jump hour
+  }
+}
 
 #Markov binning - Now this is huge!!!
 c <- c(rep(0, (length(bins)+1)))
@@ -171,13 +171,25 @@ for (i in 1:(length(timeseries$time)-1)){
   }
 }
 # Normalization
-
-
+n = 0
+for (i in 1:length(c)){
+  for (j in 1:length(c)){
+    n = n + 1
+    d[n] = d[n]/c[i]
+  }
+}
 # Converts Output
-# May nneed to change d[i]
+# May need to change d[i]
 for (i in 1:(length(c)^2)){
   out_scratch2[i] = d[i]
 }
+
+
+
+
+
+
+
 out_scratch3 <- as.data.frame(out_scratch2)
 out_scratch3 <- t(out_scratch3)
 colnames(out_scratch3) <- colnames2
@@ -209,7 +221,7 @@ output <- as.data.frame(out_scratch3) %>%
 
 ```
 
-```{r}
+```{r custom histogram}
 # custom binned graphing
 timeseries <- rnorm(2000, mean = 200, sd = 300)
 bins <- c(10,50,100,500)
@@ -253,6 +265,385 @@ ggplot(data = data)+
   theme_bw()+
   labs(title="Histogram", x = "Bins", y = "Count",
        subtitle="custom binwidths")
+
+```
+
+```{r 24-hour jump run, message = FALSE, warning = FALSE}
+#Variable set up
+start <- Sys.time()
+set.seed(5)
+y <- 365# number of days
+price <- rnorm(24*y, mean = 200, sd = 300) # price w/ norm dist
+datetime <- as.POSIXct("2018-01-01 00:00:00", tz = "UTC")
+datetime <- seq.POSIXt(from = datetime, length.out = y*24, by = "1 hour")
+time <- hour(datetime)
+timeseries <- tibble(time, price) 
+bins <- c(10,100,500,750)
+colnames <- 0
+
+#Creates col names based on bins
+bins <- bins %>% 
+  sort()
+
+for (i in 1:(length(bins)+1)){
+  if (i==1){
+    colnames[i] <- paste0("<", as.character(bins[i]))
+  }
+  else if (i==length(bins)+1){
+   colnames[i] <- paste0(">", as.character(bins[i-1])) 
+  }
+  else {
+    colnames[i] <- paste(as.character(bins[i-1]), as.character(bins[i]), sep="-")
+  }
+}
+
+#Creates Markov relations col names
+colnames2 <- 0
+n=1
+for (i in 1:length(colnames)){
+  for (j in 1:length(colnames)){
+   colnames2[n] <- paste(colnames[i], colnames[j], sep=" to ")
+   n = n+1
+  }
+}
+
+#Creates output dataframe
+out_scratch1 <- rep(0, times = length(colnames2))
+out_scratch2 <- replicate(out_scratch1, n = 24^2)
+
+# Variable filters
+hr <- seq(1:24)
+jp <- seq(1:24)-1
+
+# Loop counter
+loop <- 0
+
+for (x in 1:length(hr)){
+  for(y in 1:length(jp)){
+    if(hr[x]+jp[y] > 23){
+      jphr = hr[x]+jp[y]-23
+    } else {
+      jphr = hr[x]+jp[y]
+    }
+    scratch <- timeseries %>%
+      filter(time %in% c((hr[x]-1), jphr))
+      #filter(time %in% c(2,21))
+    print(paste("Working...",hr[x],jphr)) #Progress check
+    #[Insert Markov seq]
+    c <- c(rep(0, (length(bins)+1)))
+    d <- replicate(n = length(c), c)
+    for (i in 1:(length(scratch$time)-1)){
+      if (scratch$time[i] == (x-1)){
+        for (j in 0:length(bins)){
+          # Checks for lowest bin value
+          if (j == 0 && scratch$price[i] <= bins[j+1]){
+            for (k in 0:length(bins)){
+              # Checks for intersection of lowest values
+              if (k == 0 && scratch$price[i+1] <= bins[k+1]){
+                d[k+1] = d[k+1]+1
+              }
+              # Checks for low + high
+              else if (k == length(bins) && scratch$price[i+1] > bins[k]){
+                d[k+1] = d[k+1]+1
+              }
+              # Checks for everything else
+              else if (scratch$price[i+1] > bins[k] && scratch$price[i+1] <= bins[k+1]){
+                d[k+1] = d[k+1]+1
+              }
+            }
+            # Keep for normalization!!!
+            c[j+1] = c[j+1]+1
+          }
+          # Checks for highest bin value
+          else if (j == length(bins) && scratch$price[i] > bins[j]){
+            for (k in 0:length(bins)){
+              # Checks for intersection of high + low
+              if (k == 0 && scratch$price[i+1] <= bins[k+1]){
+                d[j*(j+1)+k+1] = d[j*(j+1)+k+1]+1
+              }
+              # Checks for intersection of high values
+              else if (k == length(bins) && scratch$price[i+1] > bins[k]){
+                d[j*(j+1)+k+1] = d[j*(j+1)+k+1]+1
+              }
+              # Checks for everything else
+              else if (scratch$price[i+1] > bins[k] && scratch$price[i+1] <= bins[k+1]){
+                d[j*(j+1)+k+1] = d[j*(j+1)+k+1]+1
+              }
+            }
+            # Keep for normalization!!!
+            c[j+1] = c[j+1]+1
+          }
+          else if (scratch$price[i] > bins[j] && scratch$price[i] <= bins[j+1]){
+            for (k in 0:length(bins)){
+              # Checks for intersection of ???+low
+              if (k == 0 && scratch$price[i+1] <= bins[k+1]){
+                d[j*(length(bins)+1)+k+1] = d[j*(length(bins)+1)+k+1]+1
+              }
+              # Checks for intersection of ???+high
+              else if (k == length(bins) && scratch$price[i+1] > bins[k]){
+                d[j*(length(bins)+1)+k+1] = d[j*(length(bins)+1)+k+1]+1
+              }
+              # Checks for everything else
+              else if (scratch$price[i+1] > bins[k] && scratch$price[i+1] <= bins[k+1]){
+                d[j*(length(bins)+1)+k+1] = d[j*(length(bins)+1)+k+1]+1
+              }
+            }
+            #Keep for normalization!!!
+            c[j+1] = c[j+1]+1
+          }
+        }
+      }
+      else {
+        next
+      }
+    }
+    # Normalization
+    n = 0
+    for (i in 1:length(c)){
+      for (j in 1:length(c)){
+        n = n + 1
+        d[n] = d[n]/c[i]
+      }
+    }
+    # Converts Output
+    for (i in 1:(length(c)^2)){
+      out_scratch2[i+length(d)*loop] = d[i]
+    }
+    loop = loop + 1
+  }
+}
+
+out_scratch3 <- as.data.frame(out_scratch2)
+out_scratch3 <- t(out_scratch3)
+colnames(out_scratch3) <- colnames2
+output <- as.data.frame(out_scratch3) %>% 
+  mutate(hour = rep(0:23, times = 1, each = 24),
+                 jumphour = rep((seq(1:24)-1), 24)) %>% 
+  relocate(jumphour) %>% 
+  relocate(hour)
+finish <- Sys.time()
+runtime <- finish-start
+print(paste("Runtime:", round(runtime, 2), "seconds"))
+```
+
+```{r function}
+MarkovChain <- function(timeseries = NULL, bins = NULL){
+  #Variable set up
+  start <- Sys.time()
+  colnames <- 0
+  
+  #Checking inputs
+  if (is.null(timeseries)){
+    set.seed(5)
+    y <- 365# number of days
+    price <- rnorm(24*y, mean = 200, sd = 300) # price w/ norm dist
+    datetime <- as.POSIXct("2018-01-01 00:00:00", tz = "UTC")
+    datetime <- seq.POSIXt(from = datetime, length.out = y*24, by = "1 hour")
+    time <- hour(datetime)
+    timeseries <- tibble(time, price) 
+  }
+  
+  '%!in%' <- function(x,y)!('%in%'(x,y))
+  
+  if ("time" %!in% colnames(timeseries)){
+    print("Time column must be labelled 'time'!")
+    invokeRestart("abort")
+  }
+  
+  if ("price" %!in% colnames(timeseries)){
+    print("series column must be labelled 'price'!")
+    invokeRestart("abort") 
+  }
+  
+  if (length(timeseries$time) < 48){
+    print("timeseries needs to be at least 48 hours long")
+    invokeRestart("abort")
+  }
+  
+  if (!is.numeric(timeseries$time)){
+    print("Time column needs to be hour int/num")
+    invokeRestart("abort")
+  }
+  
+  if (is.null(bins)){
+    bins <- c(10,100,500,750) 
+  }
+  
+  bins <- bins %>% 
+  sort()
+  
+  #Creates col names based on bins
+  for (i in 1:(length(bins)+1)){
+    if (i==1){
+      colnames[i] <- paste0("<", as.character(bins[i]))
+    }
+    else if (i==length(bins)+1){
+     colnames[i] <- paste0(">", as.character(bins[i-1])) 
+    }
+    else {
+      colnames[i] <- paste(as.character(bins[i-1]), as.character(bins[i]), sep="-")
+    }
+  }
+  
+  #Creates Markov relations col names
+  colnames2 <- 0
+  n=1
+  for (i in 1:length(colnames)){
+    for (j in 1:length(colnames)){
+     colnames2[n] <- paste(colnames[i], colnames[j], sep=" to ")
+     n = n+1
+    }
+  }
+  
+  #Creates output dataframe
+  out_scratch1 <- rep(0, times = length(colnames2))
+  out_scratch2 <- replicate(out_scratch1, n = 24^2)
+  
+  # Variable filters
+  hr <- seq(1:24)
+  jp <- seq(1:24)-1
+  
+  # Loop counter
+  loop <- 0
+  
+  for (x in 1:length(hr)){
+    for(y in 1:length(jp)){
+      if(hr[x]+jp[y] > 23){
+        jphr = hr[x]+jp[y]-23
+      } else {
+        jphr = hr[x]+jp[y]
+      }
+      scratch <- timeseries %>%
+        filter(time %in% c((hr[x]-1), jphr))
+        #filter(time %in% c(2,21))
+      print(paste("Working...",hr[x],jphr)) #Progress check
+      #[Insert Markov seq]
+      c <- c(rep(0, (length(bins)+1)))
+      d <- replicate(n = length(c), c)
+      for (i in 1:(length(scratch$time)-1)){
+        if (scratch$time[i] == (x-1)){
+          for (j in 0:length(bins)){
+            # Checks for lowest bin value
+            if (j == 0 && scratch$price[i] <= bins[j+1]){
+              for (k in 0:length(bins)){
+                # Checks for intersection of lowest values
+                if (k == 0 && scratch$price[i+1] <= bins[k+1]){
+                  d[k+1] = d[k+1]+1
+                }
+                # Checks for low + high
+                else if (k == length(bins) && scratch$price[i+1] > bins[k]){
+                  d[k+1] = d[k+1]+1
+                }
+                # Checks for everything else
+                else if (scratch$price[i+1] > bins[k] && scratch$price[i+1] <= bins[k+1]){
+                  d[k+1] = d[k+1]+1
+                }
+              }
+              # Keep for normalization!!!
+              c[j+1] = c[j+1]+1
+            }
+            # Checks for highest bin value
+            else if (j == length(bins) && scratch$price[i] > bins[j]){
+              for (k in 0:length(bins)){
+                # Checks for intersection of high + low
+                if (k == 0 && scratch$price[i+1] <= bins[k+1]){
+                  d[j*(j+1)+k+1] = d[j*(j+1)+k+1]+1
+                }
+                # Checks for intersection of high values
+                else if (k == length(bins) && scratch$price[i+1] > bins[k]){
+                  d[j*(j+1)+k+1] = d[j*(j+1)+k+1]+1
+                }
+                # Checks for everything else
+                else if (scratch$price[i+1] > bins[k] && scratch$price[i+1] <= bins[k+1]){
+                  d[j*(j+1)+k+1] = d[j*(j+1)+k+1]+1
+                }
+              }
+              # Keep for normalization!!!
+              c[j+1] = c[j+1]+1
+            }
+            else if (scratch$price[i] > bins[j] && scratch$price[i] <= bins[j+1]){
+              for (k in 0:length(bins)){
+                # Checks for intersection of ???+low
+                if (k == 0 && scratch$price[i+1] <= bins[k+1]){
+                  d[j*(length(bins)+1)+k+1] = d[j*(length(bins)+1)+k+1]+1
+                }
+                # Checks for intersection of ???+high
+                else if (k == length(bins) && scratch$price[i+1] > bins[k]){
+                  d[j*(length(bins)+1)+k+1] = d[j*(length(bins)+1)+k+1]+1
+                }
+                # Checks for everything else
+                else if (scratch$price[i+1] > bins[k] && scratch$price[i+1] <= bins[k+1]){
+                  d[j*(length(bins)+1)+k+1] = d[j*(length(bins)+1)+k+1]+1
+                }
+              }
+              #Keep for normalization!!!
+              c[j+1] = c[j+1]+1
+            }
+          }
+        }
+        else {
+          next
+        }
+      }
+      # Normalization
+      n = 0
+      for (i in 1:length(c)){
+        for (j in 1:length(c)){
+          n = n + 1
+          d[n] = d[n]/c[i]
+        }
+      }
+      # Converts Output
+      for (i in 1:(length(c)^2)){
+        out_scratch2[i+length(d)*loop] = d[i]
+      }
+      loop = loop + 1
+    }
+  }
+  out_scratch3 <- as.data.frame(out_scratch2)
+  out_scratch3 <- t(out_scratch3)
+  colnames(out_scratch3) <- colnames2
+  output <- as.data.frame(out_scratch3) %>% 
+    mutate(hour = rep(0:23, times = 1, each = 24),
+                   jumphour = rep((seq(1:24)-1), 24)) %>% 
+    relocate(jumphour) %>% 
+    relocate(hour)
+  finish <- Sys.time()
+  runtime <- finish-start
+  print(paste("Runtime:", round(runtime, 2), "seconds"))
+  return(output)
+}
+```
+
+```{r testing function}
+# test <- data.frame(time = rep((seq(1:24)-1),2), price = rep(seq(1:24),2))
+# broken <- data.frame(time = seq(1:24), price = seq(1:24))
+# example <- MarkovChain()
+# ex2 <- MarkovChain(bins = c(100)) # Works with at least one bin
+# ex3 <- MarkovChain(timeseries = test) # Needs at least 48 hours of info
+
+data <- read_csv("input.csv") %>% 
+  rename("price" = "rtlmp",
+         "time" = "hour")
+
+b <- c(-100,0,12.5,25.0,37.5,50,100)
+
+final_test <- MarkovChain(timeseries = data, bins = b)
+```
+
+```{r anlysis of Markov}
+example1 <- MarkovChain(timeseries = data, bins = c(-50,0,50)) 
+
+#Normalization Check
+
+# subset <- example1 %>% 
+#   select(starts_with(">50"))
+# 
+# subset$check = rowSums(subset)
+# 
+# subset <- subset %>% 
+#   filter(check != 1)
+
 
 ```
 
