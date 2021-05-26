@@ -307,9 +307,15 @@ for (i in 1:length(colnames)){
   }
 }
 
-#Creates output dataframe
+#Creates output dataframes
 out_scratch1 <- rep(0, times = length(colnames2))
 out_scratch2 <- replicate(out_scratch1, n = 24^2)
+out_time <- tibble(hour = rep(0, times = 576),
+                          jumphour = rep(0, times = 576))
+out_scratch4 <- tibble("bin 1" = rep(colnames, each = length(colnames), times = 576),
+                       "bin 2" = rep(colnames, times = length(colnames)*576),
+                       "probability" = rep(0, times = length(colnames2)*576),
+                       "weight" = rep(0, times = length(colnames2)*576))
 
 # Variable filters
 hr <- seq(1:24)
@@ -321,14 +327,16 @@ loop <- 0
 for (x in 1:length(hr)){
   for(y in 1:length(jp)){
     if(hr[x]+jp[y] > 23){
-      jphr = hr[x]+jp[y]-23
+      jphr = hr[x]+jp[y]-24
     } else {
       jphr = hr[x]+jp[y]
     }
     scratch <- timeseries %>%
       filter(time %in% c((hr[x]-1), jphr))
       #filter(time %in% c(2,21))
-    print(paste("Working...",hr[x],jphr)) #Progress check
+    print(paste("Working...",(hr[x]-1),jphr)) #Progress check
+    out_time$hour[loop+1] = (hr[x]-1)
+    out_time$jumphour[loop+1] = jphr
     #[Insert Markov seq]
     c <- c(rep(0, (length(bins)+1)))
     d <- replicate(n = length(c), c)
@@ -397,30 +405,30 @@ for (x in 1:length(hr)){
         next
       }
     }
-    # Normalization
+    # Normalization + output
     n = 0
     for (i in 1:length(c)){
       for (j in 1:length(c)){
         n = n + 1
         d[n] = d[n]/c[i]
+        out_scratch4$probability[n+length(d)*loop] = d[n]
+        out_scratch4$weight[n+length(d)*loop] = c[i]
       }
-    }
-    # Converts Output
-    for (i in 1:(length(c)^2)){
-      out_scratch2[i+length(d)*loop] = d[i]
     }
     loop = loop + 1
   }
 }
 
-out_scratch3 <- as.data.frame(out_scratch2)
-out_scratch3 <- t(out_scratch3)
-colnames(out_scratch3) <- colnames2
-output <- as.data.frame(out_scratch3) %>% 
-  mutate(hour = rep(0:23, times = 1, each = 24),
-                 jumphour = rep((seq(1:24)-1), 24)) %>% 
-  relocate(jumphour) %>% 
-  relocate(hour)
+out_time <- out_time %>% 
+  slice(rep(1:n(), each = length(colnames2)))
+output <- cbind(out_time, out_scratch4)
+
+#colnames(out_scratch3) <- colnames2
+# output <- as.data.frame(out_scratch3) %>% 
+#   mutate(hour = rep(0:23, times = 1, each = 24),
+#                  jumphour = rep((seq(1:24)-1), 24)) %>% 
+#   relocate(jumphour) %>% 
+#   relocate(hour)
 finish <- Sys.time()
 runtime <- finish-start
 print(paste("Runtime:", round(runtime, 2), "seconds"))
@@ -495,9 +503,15 @@ MarkovChain <- function(timeseries = NULL, bins = NULL){
     }
   }
   
-  #Creates output dataframe
+  #Creates output dataframes
   out_scratch1 <- rep(0, times = length(colnames2))
   out_scratch2 <- replicate(out_scratch1, n = 24^2)
+  out_time <- tibble(hour = rep(0, times = 576),
+                          jumphour = rep(0, times = 576))
+  out_scratch4 <- tibble("bin 1" = rep(colnames, each = length(colnames), times = 576),
+                       "bin 2" = rep(colnames, times = length(colnames)*576),
+                       "probability" = rep(0, times = length(colnames2)*576),
+                       "weight" = rep(0, times = length(colnames2)*576))
   
   # Variable filters
   hr <- seq(1:24)
@@ -509,14 +523,16 @@ MarkovChain <- function(timeseries = NULL, bins = NULL){
   for (x in 1:length(hr)){
     for(y in 1:length(jp)){
       if(hr[x]+jp[y] > 23){
-        jphr = hr[x]+jp[y]-23
+        jphr = hr[x]+jp[y]-24
       } else {
         jphr = hr[x]+jp[y]
       }
       scratch <- timeseries %>%
         filter(time %in% c((hr[x]-1), jphr))
         #filter(time %in% c(2,21))
-      print(paste("Working...",hr[x],jphr)) #Progress check
+      print(paste("Working...",(hr[x]-1),jphr)) #Progress check
+      out_time$hour[loop+1] = (hr[x]-1)
+      out_time$jumphour[loop+1] = jphr
       #[Insert Markov seq]
       c <- c(rep(0, (length(bins)+1)))
       d <- replicate(n = length(c), c)
@@ -585,29 +601,22 @@ MarkovChain <- function(timeseries = NULL, bins = NULL){
           next
         }
       }
-      # Normalization
+      # Normalization + output
       n = 0
       for (i in 1:length(c)){
         for (j in 1:length(c)){
           n = n + 1
           d[n] = d[n]/c[i]
+          out_scratch4$probability[n+length(d)*loop] = d[n]
+          out_scratch4$weight[n+length(d)*loop] = c[i]
         }
-      }
-      # Converts Output
-      for (i in 1:(length(c)^2)){
-        out_scratch2[i+length(d)*loop] = d[i]
       }
       loop = loop + 1
     }
   }
-  out_scratch3 <- as.data.frame(out_scratch2)
-  out_scratch3 <- t(out_scratch3)
-  colnames(out_scratch3) <- colnames2
-  output <- as.data.frame(out_scratch3) %>% 
-    mutate(hour = rep(0:23, times = 1, each = 24),
-                   jumphour = rep((seq(1:24)-1), 24)) %>% 
-    relocate(jumphour) %>% 
-    relocate(hour)
+  out_time <- out_time %>% 
+    slice(rep(1:n(), each = length(colnames2)))
+  output <- cbind(out_time, out_scratch4)
   finish <- Sys.time()
   runtime <- finish-start
   print(paste("Runtime:", round(runtime, 2), "seconds"))
@@ -627,6 +636,8 @@ data <- read_csv("input.csv") %>%
          "time" = "hour")
 
 b <- c(-100,0,12.5,25.0,37.5,50,100)
+
+testing <- MarkovChain()
 
 final_test <- MarkovChain(timeseries = data, bins = b)
 ```
