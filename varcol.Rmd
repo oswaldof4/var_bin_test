@@ -616,7 +616,8 @@ MarkovChain <- function(timeseries = NULL, bins = NULL){
   }
   out_time <- out_time %>% 
     slice(rep(1:n(), each = length(colnames2)))
-  output <- cbind(out_time, out_scratch4)
+  output <- cbind(out_time, out_scratch4) %>% 
+    mutate(count = round((probability*weight), 0))
   finish <- Sys.time()
   runtime <- finish-start
   print(paste("Runtime:", round(runtime, 2), "seconds"))
