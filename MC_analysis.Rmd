@@ -1,0 +1,36 @@
+---
+title: "MC Analysis"
+author: "Oswaldo Felix"
+date: "6/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+```
+
+```{r loading data}
+data <- read_csv("input.csv") %>% 
+  rename(price = rtlmp, time = hour) %>% 
+  mutate(month = month(datetime), year = year(datetime))
+```
+
+```{r}
+# Need to create bins so that they are standardized
+
+subset1 <- data %>% 
+  filter(year == 2019) %>% 
+  filter(month == 1)
+
+subset2 <- data %>% 
+  filter(year == 2019) %>% 
+  filter(month == 2)
+
+MC1 <- MarkovChain(subset1)
+MC2 <- MarkovChain(subset2)
+```
+
+
